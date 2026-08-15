@@ -6,7 +6,9 @@ from app.models.ticket import Ticket
 from app.schemas.ticket import TicketCreate, TicketUpdate
 from app.dependencies.auth import get_current_user
 from app.models.user import User
-
+from app.services.ai_service import analyze_ticket
+from app.queue.connection import ai_queue
+from app.jobs.ticket_jobs import analyze_ticket_job
 
 router = APIRouter()
 
@@ -31,13 +33,20 @@ def create_ticket(
         user_id=current_user.id,
         subject=ticket.subject,
         description=ticket.description,
-        priority=ticket.priority,
+        priority="medium",
         status="open",
+        category=None,
+        ai_summary=None,
     )
 
     db.add(new_ticket)
     db.commit()
     db.refresh(new_ticket)
+
+    ai_queue.enqueue(
+        analyze_ticket_job,
+        new_ticket.id
+    )
 
     return new_ticket
 

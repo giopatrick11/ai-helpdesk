@@ -5,7 +5,7 @@ from app.models.ticket import Ticket
 from app.models.user import User
 from app.routes.tickets import router as tickets_router
 from app.routes.auth import router as auth_router
-
+from app.routes.ai import router as ai_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,4 +29,10 @@ app.include_router(
     auth_router,
     prefix="/api/auth",
     tags=["Authentication"],
+)
+
+app.include_router(
+    ai_router,
+    prefix="/api/ai",
+    tags=["AI"],
 )

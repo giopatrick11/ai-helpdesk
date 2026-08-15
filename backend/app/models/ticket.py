@@ -29,4 +29,14 @@ class Ticket(Base):
         String(50),
         default="open"
     )
+
+    category: Mapped[str | None] = mapped_column(
+    String(100),
+    nullable=True
+)
+
+    ai_summary: Mapped[str | None] = mapped_column(
+    Text,
+    nullable=True
+    )
     

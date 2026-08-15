@@ -17,7 +17,6 @@ class Status(str, Enum):
 class TicketCreate(BaseModel):
     subject: str
     description: str
-    priority: Priority
 
 
 class TicketUpdate(BaseModel):
