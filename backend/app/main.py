@@ -6,6 +6,8 @@ from app.models.user import User
 from app.routes.tickets import router as tickets_router
 from app.routes.auth import router as auth_router
 from app.routes.ai import router as ai_router
+from app.models.document import Document, DocumentChunk
+from app.routes.documents import router as documents_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -18,6 +20,12 @@ app.include_router(
     tags=["Tickets"],
 )
 
+
+app.include_router(
+    documents_router,
+    prefix="/api/documents",
+    tags=["Documents"],
+)
 
 @app.get("/")
 def root():

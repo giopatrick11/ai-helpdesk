@@ -1,5 +1,6 @@
 from app.database.database import SessionLocal
 from app.models.ticket import Ticket
+from app.models.user import User  # noqa: F401
 from app.services.ai_service import analyze_ticket
 
 
@@ -28,6 +29,7 @@ def analyze_ticket_job(ticket_id: int):
     except Exception as error:
         db.rollback()
         print(f"Background AI analysis failed: {error}")
+        raise
 
     finally:
         db.close()
