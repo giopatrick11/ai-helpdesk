@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models.document import Document, DocumentChunk
-from app.services.embedding_service import create_document_embedding
+from app.models.document import Document
 
 
 def split_text(
@@ -31,38 +30,23 @@ def split_text(
     return chunks
 
 
-
 def create_document(
     db: Session,
     user_id: int,
     title: str,
     content: str,
-    filename: str | None = None
+    filename: str | None = None,
 ):
     document = Document(
         user_id=user_id,
         title=title,
         filename=filename,
         content=content,
+        status="processing",
     )
 
     db.add(document)
     db.commit()
     db.refresh(document)
-
-    chunks = split_text(content)
-
-    for chunk in chunks:
-        embedding = create_document_embedding(chunk)
-
-        document_chunk = DocumentChunk(
-            document_id=document.id,
-            content=chunk,
-            embedding=embedding,
-        )
-
-        db.add(document_chunk)
-
-    db.commit()
 
     return document

@@ -28,7 +28,8 @@ def search_documents(
             Document.id == DocumentChunk.document_id
         )
         .filter(
-            Document.user_id == user_id
+            Document.user_id == user_id,
+            Document.status == "ready",
         )
         .order_by(distance)
         .limit(limit)

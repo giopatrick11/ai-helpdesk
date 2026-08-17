@@ -25,7 +25,8 @@ from app.schemas.document import (
 from app.services.document_service import create_document
 from app.services.retrieval_service import search_documents
 from app.services.rag_service import ask_rag
-
+from app.queue.connection import ai_queue
+from app.jobs.document_jobs import process_document
 
 router = APIRouter()
 
@@ -43,9 +44,15 @@ def upload_document(
         content=document_data.content,
     )
 
+    ai_queue.enqueue(
+        process_document,
+        document.id,
+    )
+
     return {
         "id": document.id,
         "title": document.title,
+        "status": document.status,
     }
 
 
@@ -129,11 +136,18 @@ async def upload_pdf(
         content=content,
     )
 
+    ai_queue.enqueue(
+    process_document,
+    document.id,
+)
+
     return {
-        "id": document.id,
-        "title": document.title,
-        "pages": len(reader.pages),
-    }
+    "id": document.id,
+    "title": document.title,
+    "filename": document.filename,
+    "status": document.status,
+    "pages": len(reader.pages),
+}
 
 
 @router.get("/")
@@ -146,15 +160,43 @@ def get_documents(
     ).all()
 
     return [
-        {
-            "id": document.id,
-            "title": document.title,
-            "filename": document.filename,
-            "created_at": document.created_at,
-        }
-        for document in documents
-    ]
+    {
+        "id": document.id,
+        "title": document.title,
+        "filename": document.filename,
+        "status": document.status,
+        "created_at": document.created_at,
+    }
+    for document in documents
+]
 
+@router.get("/{document_id}")
+def get_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.user_id == current_user.id,
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found",
+        )
+
+    chunk_count = len(document.chunks)
+
+    return {
+        "id": document.id,
+        "title": document.title,
+        "filename": document.filename,
+        "status": document.status,
+        "chunk_count": chunk_count,
+        "created_at": document.created_at,
+    }
 
 @router.delete("/{document_id}", status_code=204)
 def delete_document(
