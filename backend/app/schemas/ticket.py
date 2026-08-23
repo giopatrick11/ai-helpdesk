@@ -20,7 +20,7 @@ class TicketCreate(BaseModel):
 
 
 class TicketUpdate(BaseModel):
-    subject: str
-    description: str
-    priority: Priority
-    status: Status
+    subject: str | None = None
+    description: str | None = None
+    priority: Priority | None = None
+    status: Status | None = None

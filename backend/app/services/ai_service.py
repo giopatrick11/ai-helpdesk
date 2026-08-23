@@ -1,30 +1,20 @@
-import os
-from pathlib import Path
-
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from app.config import GEMINI_API_KEY, GEMINI_MODEL
 from app.schemas.ai import TicketAnalysisResponse
 
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-
 _client = None
 
-MODEL = os.getenv("GEMINI_MODEL")
+MODEL = GEMINI_MODEL
 
 
 def get_client():
     global _client
 
     if _client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
-
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY is not configured")
-
-        _client = genai.Client(api_key=api_key)
+        _client = genai.Client(api_key=GEMINI_API_KEY)
 
     return _client
 
@@ -48,9 +38,6 @@ Determine:
 - priority: low, medium, or high
 - a short summary
 """
-
-    if not MODEL:
-        raise ValueError("GEMINI_MODEL is not configured")
 
     response = get_client().models.generate_content(
         model=MODEL,

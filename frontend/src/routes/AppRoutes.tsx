@@ -6,6 +6,7 @@ import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import DashboardPage from "../pages/DashboardPage";
 import TicketsPage from "../pages/TicketsPage";
+import DocumentsPage from "../pages/DocumentsPage";
 
 export default function AppRoutes() {
   return (
@@ -28,6 +29,15 @@ export default function AppRoutes() {
         element={
           <ProtectedRoute>
             <TicketsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/documents"
+        element={
+          <ProtectedRoute>
+            <DocumentsPage />
           </ProtectedRoute>
         }
       />

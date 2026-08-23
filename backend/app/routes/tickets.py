@@ -35,6 +35,8 @@ def create_ticket(
         status="open",
         category=None,
         ai_summary=None,
+        ai_status="processing",
+        ai_error=None,
     )
 
     db.add(new_ticket)
@@ -87,10 +89,13 @@ def update_ticket(
             detail="Ticket not found"
         )
 
-    ticket.subject = ticket_data.subject
-    ticket.description = ticket_data.description
-    ticket.priority = ticket_data.priority
-    ticket.status = ticket_data.status
+    update_data = ticket_data.model_dump(
+        exclude_unset=True,
+        exclude_none=True,
+    )
+
+    for field, value in update_data.items():
+        setattr(ticket, field, value)
 
     db.commit()
     db.refresh(ticket)

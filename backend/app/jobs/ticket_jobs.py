@@ -26,11 +26,23 @@ def analyze_ticket_job(ticket_id: int):
         ticket.priority = analysis.priority.value
         ticket.category = analysis.category
         ticket.ai_summary = analysis.summary
+        ticket.ai_status = "completed"
+        ticket.ai_error = None
 
         db.commit()
 
     except Exception as error:
         db.rollback()
+
+        ticket = db.query(Ticket).filter(
+            Ticket.id == ticket_id
+        ).first()
+
+        if ticket:
+            ticket.ai_status = "failed"
+            ticket.ai_error = "Ticket AI analysis failed."
+            db.commit()
+
         print(f"Background AI analysis failed: {error}")
         raise
 

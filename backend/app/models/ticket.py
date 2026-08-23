@@ -39,4 +39,15 @@ class Ticket(Base):
     Text,
     nullable=True
     )
+
+    ai_status: Mapped[str] = mapped_column(
+        String(50),
+        default="processing",
+        server_default="processing",
+    )
+
+    ai_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     
