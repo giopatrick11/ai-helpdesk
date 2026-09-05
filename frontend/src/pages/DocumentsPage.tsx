@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import api from "../api/client";
+import AppLayout from "../components/AppLayout";
+import { Icon, PageHeader, StatusBadge } from "../components/ui";
+import { formatTimestamp } from "../utils/format";
 
 type Document = {
   id: number;
   title: string;
   filename: string | null;
   status: string;
+  processing_error: string | null;
   created_at: string;
 };
 
@@ -54,8 +58,30 @@ export default function DocumentsPage() {
   }, []);
 
   useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
+    let isActive = true;
+
+    api.get<Document[]>("/documents/")
+      .then((response) => {
+        if (isActive) {
+          setDocuments(response.data);
+          setError("");
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setError("Could not load documents.");
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     const hasProcessingDocument = documents.some(
@@ -166,129 +192,216 @@ export default function DocumentsPage() {
   }
 
   if (loading) {
-    return <p>Loading documents...</p>;
+    return (
+      <AppLayout>
+        <p className="message message-loading">Loading documents...</p>
+      </AppLayout>
+    );
   }
 
   return (
-    <div>
-      <h1>Documents</h1>
+    <AppLayout>
+      <PageHeader
+        eyebrow="AI knowledge workspace"
+        title="Knowledge Base"
+        description="Manage trusted support content and ask questions grounded in your documents."
+      >
+        <span className="header-count">
+          <Icon name="document" size={16} />
+          {documents.length} {documents.length === 1 ? "document" : "documents"}
+        </span>
+      </PageHeader>
 
-      <form onSubmit={handleUpload}>
-        <div>
-          <label htmlFor="document-title">Title</label>
-
-          <input
-            id="document-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="document-file">PDF File</label>
-
-          <input
-            key={fileInputKey}
-            id="document-file"
-            type="file"
-            accept="application/pdf"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            required
-          />
-        </div>
-
-        {uploadError && <p>{uploadError}</p>}
-        {uploadSuccess && <p>{uploadSuccess}</p>}
-
-        <button type="submit" disabled={uploading}>
-          {uploading ? "Uploading..." : "Upload PDF"}
-        </button>
-      </form>
-
-      <hr />
-
-      <section>
-        <h2>Ask Knowledge Base</h2>
-
-        <form onSubmit={handleAsk}>
-          <div>
-            <label htmlFor="knowledge-question">Question</label>
-
-            <textarea
-              id="knowledge-question"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              required
-            />
+      <div className="knowledge-tools-grid">
+        <section className="panel upload-panel">
+          <div className="panel-heading">
+            <span className="panel-icon"><Icon name="upload" /></span>
+            <div>
+              <h3>Upload knowledge</h3>
+              <p>Add a text-based PDF to make it searchable.</p>
+            </div>
           </div>
 
-          {askError && <p>{askError}</p>}
+          <form className="form-stack" onSubmit={handleUpload}>
+            <div className="field">
+              <label htmlFor="document-title">Document title</label>
+              <input
+                id="document-title"
+                placeholder="e.g. Returns and refunds policy"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                required
+              />
+            </div>
 
-          <button type="submit" disabled={asking || !question.trim()}>
-            {asking ? "Asking..." : "Ask"}
-          </button>
-        </form>
-
-        {ragResponse && (
-          <div>
-            <h3>Answer</h3>
-            <p>{ragResponse.answer}</p>
-
-            <h3>Sources</h3>
-
-            {ragResponse.sources.length === 0 ? (
-              <p>No sources returned.</p>
-            ) : (
-              ragResponse.sources.map((source) => (
-                <div key={`${source.document_id}-${source.chunk_id ?? "source"}`}>
-                  <p>Title: {source.title}</p>
-                  <p>Document ID: {source.document_id}</p>
-                  {source.distance !== undefined && (
-                    <p>Distance: {source.distance}</p>
-                  )}
+            <div className="field">
+              <label htmlFor="document-file">PDF file</label>
+              <div className="upload-dropzone">
+                <span className="upload-dropzone-icon"><Icon name="upload" size={22} /></span>
+                <div>
+                  <strong>{file ? file.name : "Choose a PDF to upload"}</strong>
+                  <small>PDF files with selectable text work best</small>
                 </div>
-              ))
-            )}
+                <input
+                  key={fileInputKey}
+                  id="document-file"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-feedback" aria-live="polite">
+              {uploadError && <p className="message message-error" role="alert">{uploadError}</p>}
+              {uploadSuccess && <p className="message message-success">{uploadSuccess}</p>}
+            </div>
+
+            <button className="button button-primary" type="submit" disabled={uploading}>
+              {!uploading && <Icon name="upload" size={17} />}
+              {uploading ? "Uploading..." : "Upload PDF"}
+            </button>
+          </form>
+        </section>
+
+        <section className="panel assistant-panel">
+          <div className="panel-heading">
+            <span className="panel-icon panel-icon-ai"><Icon name="sparkles" /></span>
+            <div>
+              <h3>Ask AI</h3>
+              <p>Get answers grounded in ready documents.</p>
+            </div>
           </div>
-        )}
-      </section>
 
-      <hr />
+          <form className="form-stack" onSubmit={handleAsk}>
+            <div className="field">
+              <label htmlFor="knowledge-question">Question</label>
+              <textarea
+                id="knowledge-question"
+                placeholder="Ask about a policy, process, or product..."
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                required
+              />
+            </div>
 
-      {error && <p>{error}</p>}
-      {deleteError && <p>{deleteError}</p>}
+            {askError && <p className="message message-error" role="alert">{askError}</p>}
+
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={asking || !question.trim()}
+            >
+              {!asking && <Icon name="send" size={17} />}
+              {asking ? "Asking..." : "Ask"}
+            </button>
+          </form>
+
+          {ragResponse && (
+            <div className="answer-panel" aria-live="polite">
+              <div className="answer-heading">
+                <span><Icon name="sparkles" size={17} /></span>
+                <h4>Answer</h4>
+              </div>
+              <p className="answer-copy">{ragResponse.answer}</p>
+
+              <div className="sources-heading">
+                <h4>Sources</h4>
+                <span>{ragResponse.sources.length}</span>
+              </div>
+
+              {ragResponse.sources.length === 0 ? (
+                <p className="source-empty">No sources returned.</p>
+              ) : (
+                <div className="source-list">
+                  {ragResponse.sources.map((source) => (
+                    <div
+                      className="source-card"
+                      key={`${source.document_id}-${source.chunk_id ?? "source"}`}
+                    >
+                      <span className="source-icon"><Icon name="document" size={16} /></span>
+                      <div>
+                        <strong>{source.title}</strong>
+                        <p>Document #{source.document_id}</p>
+                      </div>
+                      {source.distance !== undefined && (
+                        <small>Distance {source.distance.toFixed(3)}</small>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <div className="page-messages" aria-live="polite">
+        {error && <p className="message message-error" role="alert">{error}</p>}
+        {deleteError && <p className="message message-error" role="alert">{deleteError}</p>}
+      </div>
 
       {!error && documents.length === 0 ? (
-        <p>No documents yet.</p>
+        <div className="empty-state">
+          <span className="empty-state-icon"><Icon name="document" size={22} /></span>
+          <h3>No knowledge added yet</h3>
+          <p>Upload your first PDF to start building the knowledge base.</p>
+        </div>
       ) : (
-        documents.map((document) => {
-          const isDeleting = deletingDocumentIds.includes(document.id);
-
-          return (
-            <div key={document.id}>
-              <h2>{document.title}</h2>
-
-              <p>ID: {document.id}</p>
-              <p>Filename: {document.filename ?? "None"}</p>
-              <p>Status: {document.status}</p>
-              <p>Created: {document.created_at}</p>
-
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={() => {
-                  void handleDelete(document);
-                }}
-              >
-                {isDeleting ? "Deleting..." : "Delete"}
-              </button>
-
-              <hr />
+        <section className="documents-section" aria-labelledby="documents-list-title">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Content library</p>
+              <h3 id="documents-list-title">Documents</h3>
             </div>
-          );
-        })
+            <span className="section-count">{documents.length} total</span>
+          </div>
+
+          <div className="document-list">
+            {documents.map((document) => {
+              const isDeleting = deletingDocumentIds.includes(document.id);
+
+              return (
+                <article className="document-card" key={document.id}>
+                  <span className="document-card-icon"><Icon name="document" size={20} /></span>
+                  <div className="document-card-main">
+                    <div className="document-card-title">
+                      <p className="document-id">Document #{document.id}</p>
+                      <h3>{document.title}</h3>
+                    </div>
+                    <div className="document-meta">
+                      <span>{document.filename ?? "No filename"}</span>
+                      <span aria-hidden="true">•</span>
+                      <span>{formatTimestamp(document.created_at)}</span>
+                    </div>
+                    {document.status === "failed" && (
+                      <p className="message message-error" role="alert">
+                        {document.processing_error ?? "Document processing failed."}
+                      </p>
+                    )}
+                  </div>
+                  <StatusBadge value={document.status} />
+                  <button
+                    className="icon-button danger-icon-button"
+                    type="button"
+                    disabled={isDeleting}
+                    aria-label={`Delete ${document.title}`}
+                    onClick={() => {
+                      void handleDelete(document);
+                    }}
+                  >
+                    <Icon name="trash" size={17} />
+                    <span className="desktop-delete-label">
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </span>
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
       )}
-    </div>
+    </AppLayout>
   );
 }

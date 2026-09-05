@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import api from "../api/client";
+import AppLayout from "../components/AppLayout";
+import { Icon, MetricCard, PageHeader } from "../components/ui";
 
 type User = {
   id: number;
@@ -20,8 +22,6 @@ type Document = {
 };
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-
   const [user, setUser] = useState<User | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -55,13 +55,12 @@ export default function DashboardPage() {
     loadDashboard();
   }, []);
 
-  function handleLogout() {
-    localStorage.removeItem("access_token");
-    navigate("/login");
-  }
-
   if (loading) {
-    return <p>Loading...</p>;
+    return (
+      <AppLayout>
+        <p className="message message-loading">Loading...</p>
+      </AppLayout>
+    );
   }
 
   const openTickets = tickets.filter(
@@ -78,49 +77,129 @@ export default function DashboardPage() {
   ).length;
 
   return (
-    <div>
-      <h1>Dashboard</h1>
+    <AppLayout>
+      <PageHeader
+        eyebrow="Overview"
+        title="Dashboard"
+        description="Monitor your support queue and knowledge base at a glance."
+      />
 
-      {error && <p>{error}</p>}
+      {error && <p className="message message-error" role="alert">{error}</p>}
 
-      <section>
-        <h2>Account</h2>
-
+      <section className="welcome-panel">
         {user && (
           <>
-            <p>Welcome, {user.name}</p>
-            <p>{user.email}</p>
+            <div className="user-avatar" aria-hidden="true">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="welcome-copy">
+              <p className="eyebrow">Your workspace</p>
+              <h3>Welcome, {user.name}</h3>
+              <p>{user.email}</p>
+            </div>
+            <div className="welcome-status">
+              <span className="system-status-dot" aria-hidden="true" />
+              System operational
+            </div>
           </>
         )}
       </section>
 
-      <section>
-        <h2>Ticket Summary</h2>
-
-        <p>Total tickets: {tickets.length}</p>
-        <p>Open tickets: {openTickets}</p>
-        <p>Resolved tickets: {resolvedTickets}</p>
+      <section className="dashboard-section" aria-labelledby="ticket-metrics-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Support queue</p>
+            <h3 id="ticket-metrics-title">Ticket activity</h3>
+          </div>
+          <Link className="text-link" to="/tickets">
+            View tickets <Icon name="arrow" size={15} />
+          </Link>
+        </div>
+        <div className="metrics-grid">
+          <MetricCard
+            label="Total tickets"
+            value={tickets.length}
+            helper="All support requests"
+            icon="ticket"
+            tone="accent"
+          />
+          <MetricCard
+            label="Open tickets"
+            value={openTickets}
+            helper="Awaiting a resolution"
+            icon="open"
+            tone="warning"
+          />
+          <MetricCard
+            label="Resolved tickets"
+            value={resolvedTickets}
+            helper="Successfully completed"
+            icon="check"
+            tone="success"
+          />
+        </div>
       </section>
 
-      <section>
-        <h2>Knowledge Base Summary</h2>
-
-        <p>Total documents: {documents.length}</p>
-        <p>Ready documents: {readyDocuments}</p>
-        <p>Processing documents: {processingDocuments}</p>
+      <section className="dashboard-section" aria-labelledby="document-metrics-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Knowledge base</p>
+            <h3 id="document-metrics-title">Document activity</h3>
+          </div>
+          <Link className="text-link" to="/documents">
+            View knowledge base <Icon name="arrow" size={15} />
+          </Link>
+        </div>
+        <div className="metrics-grid">
+          <MetricCard
+            label="Total documents"
+            value={documents.length}
+            helper="Uploaded knowledge"
+            icon="document"
+          />
+          <MetricCard
+            label="Ready documents"
+            value={readyDocuments}
+            helper="Available for AI answers"
+            icon="check"
+            tone="success"
+          />
+          <MetricCard
+            label="Processing documents"
+            value={processingDocuments}
+            helper="Preparing for search"
+            icon="processing"
+            tone="warning"
+          />
+        </div>
       </section>
 
-      <section>
-        <h2>Navigation</h2>
-
-        <nav>
-          <Link to="/tickets">Tickets</Link>
-          {" | "}
-          <Link to="/documents">Documents</Link>
+      <section className="dashboard-section" aria-labelledby="shortcuts-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Shortcuts</p>
+            <h3 id="shortcuts-title">Continue working</h3>
+          </div>
+        </div>
+        <nav className="shortcut-grid" aria-label="Dashboard shortcuts">
+          <Link className="shortcut-card" to="/tickets">
+            <span className="shortcut-icon"><Icon name="inbox" /></span>
+            <span>
+              <strong>Manage support queue</strong>
+              <small>Create, review, and update tickets.</small>
+            </span>
+            <Icon name="arrow" />
+          </Link>
+          <Link className="shortcut-card" to="/documents">
+            <span className="shortcut-icon"><Icon name="sparkles" /></span>
+            <span>
+              <strong>Ask the knowledge base</strong>
+              <small>Upload resources and get grounded answers.</small>
+            </span>
+            <Icon name="arrow" />
+          </Link>
         </nav>
       </section>
-
-      <button onClick={handleLogout}>Logout</button>
-    </div>
+    </AppLayout>
   );
 }
