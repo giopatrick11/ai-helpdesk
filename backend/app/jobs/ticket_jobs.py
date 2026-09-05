@@ -1,4 +1,5 @@
 import app.models
+from rq import get_current_job
 
 from app.database.database import SessionLocal
 from app.models.ticket import Ticket
@@ -17,6 +18,10 @@ def analyze_ticket_job(ticket_id: int):
 
         if not ticket:
             return
+
+        ticket.ai_status = "processing"
+        ticket.ai_error = None
+        db.commit()
 
         analysis = analyze_ticket(
             ticket.subject,
@@ -39,8 +44,15 @@ def analyze_ticket_job(ticket_id: int):
         ).first()
 
         if ticket:
-            ticket.ai_status = "failed"
-            ticket.ai_error = "Ticket AI analysis failed."
+            job = get_current_job()
+
+            if job is not None and job.should_retry:
+                ticket.ai_status = "processing"
+                ticket.ai_error = None
+            else:
+                ticket.ai_status = "failed"
+                ticket.ai_error = "Ticket AI analysis failed."
+
             db.commit()
 
         print(f"Background AI analysis failed: {error}")

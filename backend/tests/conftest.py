@@ -1,7 +1,10 @@
+import os
+
 import pytest
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app as fastapi_app
@@ -11,9 +14,13 @@ from app.database.database import Base, get_db
 import app.models
 
 
-TEST_DATABASE_URL = (
-    "postgresql+psycopg://giopatrick@localhost:5432/ai_helpdesk_test"
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+psycopg://localhost:5432/ai_helpdesk_test",
 )
+
+if not (make_url(TEST_DATABASE_URL).database or "").endswith("_test"):
+    raise RuntimeError("TEST_DATABASE_URL must target a database ending in _test")
 
 
 engine = create_engine(

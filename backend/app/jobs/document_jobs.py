@@ -1,4 +1,5 @@
 import app.models
+from rq import get_current_job
 
 from app.database.database import SessionLocal
 from app.models.document import Document, DocumentChunk
@@ -18,6 +19,10 @@ def process_document(document_id: int):
         if not document:
             return
 
+        document.status = "processing"
+        document.processing_error = None
+        db.commit()
+
         chunks = split_text(document.content)
 
         for chunk_content in chunks:
@@ -34,6 +39,7 @@ def process_document(document_id: int):
             db.add(chunk)
 
         document.status = "ready"
+        document.processing_error = None
 
         db.commit()
 
@@ -45,7 +51,15 @@ def process_document(document_id: int):
         ).first()
 
         if document:
-            document.status = "failed"
+            job = get_current_job()
+
+            if job is not None and job.should_retry:
+                document.status = "processing"
+                document.processing_error = None
+            else:
+                document.status = "failed"
+                document.processing_error = "Document processing failed."
+
             db.commit()
 
         raise

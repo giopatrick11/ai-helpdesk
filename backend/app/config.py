@@ -36,6 +36,13 @@ GEMINI_MODEL = get_required_env("GEMINI_MODEL")
 GEMINI_EMBEDDING_MODEL = get_required_env("GEMINI_EMBEDDING_MODEL")
 REDIS_URL = get_required_env("REDIS_URL")
 
+MAX_PDF_UPLOAD_BYTES = int(
+    os.getenv("MAX_PDF_UPLOAD_BYTES", str(10 * 1024 * 1024))
+)
+
+if MAX_PDF_UPLOAD_BYTES <= 0:
+    raise ValueError("MAX_PDF_UPLOAD_BYTES must be greater than zero")
+
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")

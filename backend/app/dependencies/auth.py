@@ -24,13 +24,15 @@ def get_current_user(
             algorithms=[ALGORITHM],
         )
 
-        user_id = payload.get("sub")
+        subject = payload.get("sub")
 
-        if user_id is None:
+        if not isinstance(subject, str) or not subject.isdecimal():
             raise HTTPException(
                 status_code=401,
                 detail="Invalid token",
             )
+
+        user_id = int(subject)
 
     except jwt.InvalidTokenError:
         raise HTTPException(

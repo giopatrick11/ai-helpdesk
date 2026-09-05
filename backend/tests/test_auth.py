@@ -110,3 +110,17 @@ def test_me_returns_current_user(client):
 
     assert data["email"] == "me@example.com"
     assert data["name"] == "Current User"
+
+
+def test_malformed_jwt_subject_is_rejected(client):
+    from app.routes.auth import create_access_token
+
+    token = create_access_token({"sub": "not-a-user-id"})
+
+    response = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"

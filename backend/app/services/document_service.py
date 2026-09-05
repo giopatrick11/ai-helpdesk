@@ -1,6 +1,40 @@
+from io import BytesIO
+
+from pypdf import PdfReader
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
+
+
+class PDFProcessingError(ValueError):
+    """Raised when a PDF cannot be safely converted to text."""
+
+
+def extract_pdf_text(file_bytes: bytes) -> tuple[str, int]:
+    try:
+        reader = PdfReader(BytesIO(file_bytes))
+
+        if reader.is_encrypted:
+            raise PDFProcessingError("Encrypted PDFs are not supported")
+
+        pages = []
+
+        for page in reader.pages:
+            text = page.extract_text()
+
+            if text:
+                pages.append(text)
+    except PDFProcessingError:
+        raise
+    except Exception as error:
+        raise PDFProcessingError("The PDF could not be read") from error
+
+    content = "\n\n".join(pages)
+
+    if not content.strip():
+        raise PDFProcessingError("No readable text found in PDF")
+
+    return content, len(reader.pages)
 
 
 def split_text(
@@ -43,6 +77,7 @@ def create_document(
         filename=filename,
         content=content,
         status="processing",
+        processing_error=None,
     )
 
     db.add(document)

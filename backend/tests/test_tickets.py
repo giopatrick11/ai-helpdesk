@@ -399,6 +399,51 @@ def test_failed_ticket_analysis_job_marks_failed(
     assert data["ai_summary"] is None
 
 
+def test_ticket_job_stays_processing_while_retry_is_available(
+    client,
+    db_session,
+    monkeypatch,
+):
+    token = register_and_login(
+        client,
+        "AI Retry User",
+        "ai-retry@example.com",
+    )
+    response = client.post(
+        "/api/tickets/",
+        json={
+            "subject": "Temporary provider failure",
+            "description": "This job should remain pending for retry.",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    ticket_id = response.json()["id"]
+
+    monkeypatch.setattr(
+        "app.jobs.ticket_jobs.SessionLocal",
+        lambda: db_session,
+    )
+    monkeypatch.setattr(
+        "app.jobs.ticket_jobs.get_current_job",
+        lambda: SimpleNamespace(should_retry=True),
+    )
+
+    def fail_analysis(subject, description):
+        raise RuntimeError("Temporary provider failure")
+
+    monkeypatch.setattr(
+        "app.jobs.ticket_jobs.analyze_ticket",
+        fail_analysis,
+    )
+
+    with pytest.raises(RuntimeError):
+        analyze_ticket_job(ticket_id)
+
+    ticket = db_session.query(Ticket).filter(Ticket.id == ticket_id).first()
+    assert ticket.ai_status == "processing"
+    assert ticket.ai_error is None
+
+
 def test_invalid_ticket_status_is_rejected(client):
     token = register_and_login(
         client,
@@ -470,3 +515,66 @@ def test_user_cannot_delete_another_users_ticket(client):
     )
 
     assert response.status_code == 404
+
+
+def test_ticket_enqueue_failure_marks_ticket_failed(client, monkeypatch):
+    token = register_and_login(
+        client,
+        "Queue Failure User",
+        "ticket-queue-failure@example.com",
+    )
+
+    def fail_enqueue(*args, **kwargs):
+        raise ConnectionError("Redis is unavailable")
+
+    monkeypatch.setattr(
+        "app.routes.tickets.ai_queue.enqueue",
+        fail_enqueue,
+    )
+
+    response = client.post(
+        "/api/tickets/",
+        json={
+            "subject": "Queue failure",
+            "description": "This ticket must not remain processing.",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["ai_status"] == "failed"
+    assert response.json()["ai_error"] == (
+        "Ticket AI analysis could not be queued."
+    )
+
+
+def test_ticket_enqueue_uses_retry_policy(client, monkeypatch):
+    token = register_and_login(
+        client,
+        "Queue Success User",
+        "ticket-queue-success@example.com",
+    )
+    enqueue_calls = []
+
+    def capture_enqueue(*args, **kwargs):
+        enqueue_calls.append((args, kwargs))
+
+    monkeypatch.setattr(
+        "app.routes.tickets.ai_queue.enqueue",
+        capture_enqueue,
+    )
+
+    response = client.post(
+        "/api/tickets/",
+        json={
+            "subject": "Queue success",
+            "description": "This ticket should be queued with retries.",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["ai_status"] == "processing"
+    assert len(enqueue_calls) == 1
+    assert enqueue_calls[0][1]["retry"].max == 2
+    assert enqueue_calls[0][1]["retry"].intervals == [10, 30]

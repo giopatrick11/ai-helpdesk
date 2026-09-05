@@ -36,6 +36,11 @@ def root():
         "message": "AI Helpdesk API is running"
     }
 
+
+@app.get("/health", tags=["Health"])
+def health():
+    return {"status": "ok"}
+
 app.include_router(
     auth_router,
     prefix="/api/auth",

@@ -8,8 +8,6 @@ from fastapi import (
     Response,
 )
 from sqlalchemy.orm import Session
-from pypdf import PdfReader
-from io import BytesIO
 
 from app.database.database import get_db
 from app.dependencies.auth import get_current_user
@@ -22,13 +20,32 @@ from app.schemas.document import (
     RagQuestionRequest,
 )
 
-from app.services.document_service import create_document
+from app.config import MAX_PDF_UPLOAD_BYTES
+from app.services.document_service import (
+    PDFProcessingError,
+    create_document,
+    extract_pdf_text,
+)
 from app.services.retrieval_service import search_documents
 from app.services.rag_service import ask_rag
-from app.queue.connection import ai_queue
+from app.queue.connection import AI_JOB_RETRY, ai_queue
 from app.jobs.document_jobs import process_document
 
 router = APIRouter()
+
+
+def enqueue_document_processing(document: Document, db: Session) -> None:
+    try:
+        ai_queue.enqueue(
+            process_document,
+            document.id,
+            retry=AI_JOB_RETRY,
+        )
+    except Exception:
+        document.status = "failed"
+        document.processing_error = "Document processing could not be queued."
+        db.commit()
+        db.refresh(document)
 
 
 @router.post("/", status_code=201)
@@ -44,15 +61,13 @@ def upload_document(
         content=document_data.content,
     )
 
-    ai_queue.enqueue(
-        process_document,
-        document.id,
-    )
+    enqueue_document_processing(document, db)
 
     return {
         "id": document.id,
         "title": document.title,
         "status": document.status,
+        "processing_error": document.processing_error,
     }
 
 
@@ -106,27 +121,21 @@ async def upload_pdf(
             detail="Only PDF files are allowed",
         )
 
-    file_bytes = await file.read()
+    file_bytes = await file.read(MAX_PDF_UPLOAD_BYTES + 1)
 
-    reader = PdfReader(
-        BytesIO(file_bytes)
-    )
+    if len(file_bytes) > MAX_PDF_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="PDF file is too large",
+        )
 
-    pages = []
-
-    for page in reader.pages:
-        text = page.extract_text()
-
-        if text:
-            pages.append(text)
-
-    content = "\n\n".join(pages)
-
-    if not content.strip():
+    try:
+        content, page_count = extract_pdf_text(file_bytes)
+    except PDFProcessingError as error:
         raise HTTPException(
             status_code=400,
-            detail="No readable text found in PDF",
-        )
+            detail=str(error),
+        ) from error
 
     document = create_document(
         db=db,
@@ -136,18 +145,16 @@ async def upload_pdf(
         content=content,
     )
 
-    ai_queue.enqueue(
-    process_document,
-    document.id,
-)
+    enqueue_document_processing(document, db)
 
     return {
-    "id": document.id,
-    "title": document.title,
-    "filename": document.filename,
-    "status": document.status,
-    "pages": len(reader.pages),
-}
+        "id": document.id,
+        "title": document.title,
+        "filename": document.filename,
+        "status": document.status,
+        "processing_error": document.processing_error,
+        "pages": page_count,
+    }
 
 
 @router.get("/")
@@ -160,15 +167,17 @@ def get_documents(
     ).all()
 
     return [
-    {
-        "id": document.id,
-        "title": document.title,
-        "filename": document.filename,
-        "status": document.status,
-        "created_at": document.created_at,
-    }
-    for document in documents
-]
+        {
+            "id": document.id,
+            "title": document.title,
+            "filename": document.filename,
+            "status": document.status,
+            "processing_error": document.processing_error,
+            "created_at": document.created_at,
+        }
+        for document in documents
+    ]
+
 
 @router.get("/{document_id}")
 def get_document(
@@ -194,9 +203,11 @@ def get_document(
         "title": document.title,
         "filename": document.filename,
         "status": document.status,
+        "processing_error": document.processing_error,
         "chunk_count": chunk_count,
         "created_at": document.created_at,
     }
+
 
 @router.delete("/{document_id}", status_code=204)
 def delete_document(

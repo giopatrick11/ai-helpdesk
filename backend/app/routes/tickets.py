@@ -6,7 +6,7 @@ from app.models.ticket import Ticket
 from app.schemas.ticket import TicketCreate, TicketUpdate
 from app.dependencies.auth import get_current_user
 from app.models.user import User
-from app.queue.connection import ai_queue
+from app.queue.connection import AI_JOB_RETRY, ai_queue
 
 router = APIRouter()
 
@@ -43,10 +43,17 @@ def create_ticket(
     db.commit()
     db.refresh(new_ticket)
 
-    ai_queue.enqueue(
-        "app.jobs.ticket_jobs.analyze_ticket_job",
-        new_ticket.id,
-    )
+    try:
+        ai_queue.enqueue(
+            "app.jobs.ticket_jobs.analyze_ticket_job",
+            new_ticket.id,
+            retry=AI_JOB_RETRY,
+        )
+    except Exception:
+        new_ticket.ai_status = "failed"
+        new_ticket.ai_error = "Ticket AI analysis could not be queued."
+        db.commit()
+        db.refresh(new_ticket)
 
     return new_ticket
 
